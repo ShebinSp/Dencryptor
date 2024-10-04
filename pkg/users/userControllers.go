@@ -68,23 +68,113 @@ func SignUp(w http.ResponseWriter, r *http.Request) {
 	if res.Error != nil {
 		resp := map[string]string{
 			"status": "false",
-			"error":  "Table \"user\" creation failled",
+			"error":  "An error occured",
 		}
-
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
 
-	ok := fmt.Sprintf("user %s registered", user.FirstName)
+	if err := SendOTP(user.Email, r); err != nil {
+		http.Error(w, "Email Verification failed", http.StatusBadRequest)
+		return
+	}
+
+	ok := fmt.Sprintf("user '%s' registered, Please verify your email", user.FirstName)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ok)
 }
 
+func SendOTP(email string, r *http.Request) error {
+	var user models.Otp
+
+	otp := auth.GenerateOTP()
+	user.Email = email
+	user.Otp = otp
+
+	res := db.Table("otps").Where("email = ?", email)
+	if res.RowsAffected == 0 {
+		res = db.Create(&user)
+		if res.Error != nil {
+			return fmt.Errorf("failed to create database: %v", res.Error)
+		}
+	} else if res.RowsAffected > 0 {
+		res = db.Table("otps").Where("email = ?", user.Email).Update("otp", otp)
+		if res.RowsAffected == 0 {
+			//	errMsg := fmt.Sprintf("User with email \" %s \" does not exist, Please signup\n", user.Email)
+			//	http.Error(w, errMsg, http.StatusBadRequest)
+			return fmt.Errorf("user with email \" %s \" does not exist, Please signup", user.Email)
+		}
+		if res.Error != nil {
+			//http.Error(w, res.Error.Error(), http.StatusBadRequest)
+			return res.Error
+		}
+	} else {
+		return res.Error
+	}
+
+	auth.SendEmail(email, "OTP Verification", []byte("Do not share OTP: "+otp), r)
+	return nil
+}
+
+func VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var user models.Otp
+	var svdInfo models.Otp
+
+	// Decode the request body
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, "Failed to decode the data from request", http.StatusBadRequest)
+		return
+	}
+
+	// Query the OTP based on email
+	res := db.Table("otps").Where("email = ?", user.Email).Scan(&svdInfo)
+	if res.RowsAffected == 0 {
+		errMsg := fmt.Sprintf("User with email \" %s \" does not exist, Please signup\n", user.Email)
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
+	} else if res.Error != nil {
+		http.Error(w, res.Error.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Check if OTP matches
+	if svdInfo.Otp != user.Otp {
+		// If OTP doesn't match, delete the user and otp records
+		rec := db.Table("users").Where("email = ?", user.Email).Delete(&models.User{})
+		if rec.Error != nil {
+			http.Error(w, "Error deleting user: "+rec.Error.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		res := db.Table("otps").Where("email = ?", user.Email).Delete(&models.Otp{})
+		if res.Error != nil {
+			http.Error(w, "Error deleting OTP: "+res.Error.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		http.Error(w, "Invalid OTP", http.StatusBadRequest)
+		return
+	}
+
+	// If OTP is correct, update the OTP field to "ok"
+	res = db.Table("otps").Where("email = ?", user.Email).Update("otp", "ok")
+	if res.Error != nil {
+		http.Error(w, "OTP updation failed", http.StatusInternalServerError)
+		return
+	}
+
+	// Send success response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	response := map[string]string{"message": "OTP verified, Please login"}
+	json.NewEncoder(w).Encode(response)
+}
+
 func Login(w http.ResponseWriter, r *http.Request) {
-	log.Println("Login endpoint hit")
 
 	type userInfo struct {
 		Email    string `json:"email"`
@@ -93,6 +183,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	var userinfo userInfo
 	var user models.User
+	var otp string
 
 	if !dbConnected {
 		err := connectToDb()
@@ -108,6 +199,38 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Println("Decoded user data:", userinfo.Email)
+	log.Println("user otp in login: ", otp)
+
+	// Retrieve OTP from the database
+	res := db.Table("otps").Where("email = ?", userinfo.Email).Select("otp").Scan(&otp)
+
+	// If no record is found, delete the user and return an error
+	if res.RowsAffected == 0 {
+		rec := db.Table("users").Where("email = ?", userinfo.Email).Delete(&models.User{})
+		if rec.Error != nil {
+			http.Error(w, "an error occurred while deleting user: "+rec.Error.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Error(w, "User not verified", http.StatusBadRequest)
+		return
+	}
+
+	// Handle any error that occurred while retrieving the OTP
+	if res.Error != nil {
+		http.Error(w, "an error occurred while retrieving OTP: "+res.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// If the OTP is not "ok", delete the user and return an error
+	if otp != "ok" {
+		rec := db.Table("users").Where("email = ?", userinfo.Email).Delete(&models.User{})
+		if rec.Error != nil {
+			http.Error(w, "an error occurred while deleting user: "+rec.Error.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Error(w, "User not verified", http.StatusBadRequest)
+		return
+	}
 
 	// Query the user email
 	rec := db.Table("users").Where("email = ?", userinfo.Email).Scan(&user)

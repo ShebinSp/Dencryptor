@@ -40,6 +40,3 @@ func GetUserId(r *http.Request, key interface{}) (uint, bool) {
 	return id, ok
 }
 
-func GenerateFile() {
-
-}

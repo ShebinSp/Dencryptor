@@ -50,9 +50,9 @@ func SendEmail(addr, subject string, file []byte, r *http.Request) error {
 		msg = []byte(subjectHeader + mime + body + attachment)
 
 	} else if sub[0] == "OTP" {
-		// msg = []byte("To: "+ addr +"\r\n" +
-		// 		"subject: " + subject + "\r\n" +
-		// 		"\r\n" + string(file) +" ")
+		msg = []byte("To: "+ addr +"\r\n" +
+				"subject: " + subject + "\r\n" +
+				"\r\n" + string(file) +" ")
 	}
 
 	err := smtp.SendMail(host+":587", auth, service, []string{addr}, msg)

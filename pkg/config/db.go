@@ -50,7 +50,9 @@ func connectDb() error {
 func runMigration() error {
 	err := db.AutoMigrate(&models.ImageData{},
 		&models.ImageFileList{},
-		&models.User{})
+		&models.User{},
+		&models.Otp{},
+	)
 
 	if err != nil {
 		return fmt.Errorf("migration failed: %w", err)
