@@ -44,7 +44,30 @@ func addData(img *models.ImageData) (*gorm.DB, error) {
 // var data datas
 
 func EncodeImage(w http.ResponseWriter, r *http.Request) {
+
 	var wg sync.WaitGroup
+
+	// Increment the WaitGroup counter for user ID retrieval
+	wg.Add(1)
+
+	// Get user ID asynchronously
+	var userId uint
+	go func() {
+		defer wg.Done() // Notify when done
+		id, ok := utils.GetUserId(r, models.UserIDKey)
+		if ok {
+			userId = id
+		}
+	}()
+
+	// Wait for user ID retrieval to complete
+	wg.Wait()
+
+	// Check if user ID was retrieved
+	if userId == 0 {
+		http.Error(w, "Unauthorized user, please login again", http.StatusInternalServerError)
+		return
+	}
 
 	log.Println("Encrypting started")
 	// To store the image data
@@ -97,27 +120,7 @@ func EncodeImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Increment the WaitGroup counter for user ID retrieval
-	wg.Add(1)
-
-	// Get user ID asynchronously
-	var userId uint
-	go func() {
-		defer wg.Done() // Notify when done
-		id, ok := utils.GetUserId(r, models.UserIDKey)
-		if ok {
-			userId = id
-		}
-	}()
-
-	// Wait for user ID retrieval to complete
-	wg.Wait()
-
-	// Check if user ID was retrieved
-	if userId == 0 {
-		http.Error(w, "An error occurred, please login again", http.StatusInternalServerError)
-		return
-	}
+	
 
 	// Add user ID to image data
 	imgData.UserId = userId
@@ -200,13 +203,13 @@ func DecodeImage(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("idStr: ", idStr)
 
 	fmt.Println("Key: ", key)
-	var id uint
+	var fileid uint
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		uid, err := utils.Convert(idStr)
-		id = uid
+		fileid = uid
 		if err != nil {
 			http.Error(w, "id convertion failed", http.StatusBadRequest)
 		}
@@ -217,7 +220,7 @@ func DecodeImage(w http.ResponseWriter, r *http.Request) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		imgData, err = getImageData(id, hash)
+		imgData, err = getImageData(fileid, hash)
 		if err != nil {
 			errChan <- err
 			return
@@ -227,13 +230,13 @@ func DecodeImage(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case err = <-errChan:
+		fmt.Println("imgDataErr: ", err)
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	default:
 	}
 
-	fmt.Println("ID: ", id)
-	fmt.Println("ImageData.Name: ", imgData.FileName, "ID: ", imgData.Id)
+	fmt.Println("File Id: ", fileid)
 
 	// Read the file content into a []byte
 	wg.Add(1)
@@ -282,15 +285,15 @@ func DecodeImage(w http.ResponseWriter, r *http.Request) {
 }
 
 // getImageData by id and a hash and compare the hashs
-func getImageData(id uint, hash string) (models.ImageData, error) {
+func getImageData(fileid uint, hash string) (models.ImageData, error) {
 	var imgDataByI models.ImageData
 	var imgDataByH models.ImageData
 
 	db, _ := config.Config()
 
-	res := db.Table("image_data").Where("id = ?", id).Scan(&imgDataByI)
+	res := db.Table("image_data").Where("id = ?", fileid).Scan(&imgDataByI)
 	if res.Error != nil {
-		return models.ImageData{}, fmt.Errorf("user not found")
+		return models.ImageData{}, fmt.Errorf("file not found")
 	}
 	res = db.Table("image_data").Where("hash = ?", hash).Scan(&imgDataByH)
 	if res.Error != nil {
@@ -301,7 +304,7 @@ func getImageData(id uint, hash string) (models.ImageData, error) {
 		return imgDataByI, nil
 	}
 
-	return models.ImageData{}, fmt.Errorf("no record found with id %v or hash %v", id, hash)
+	return models.ImageData{}, fmt.Errorf("no record found with file id %v or hash %v", fileid, hash)
 }
 
 //    <----UNCOMMENT TO SAVE LOCALLY----->

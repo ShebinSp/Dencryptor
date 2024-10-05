@@ -17,6 +17,8 @@ func RegisterRoutes() http.Handler {
 
 	mux.HandleFunc("/user/login", handlers.LoginHandler)
 
+	mux.Handle("/user/logout", handlers.AuthMiddleware(http.HandlerFunc(handlers.LogoutHandler)))
+
 	mux.Handle("/user/encrypt", handlers.AuthMiddleware(http.HandlerFunc(handlers.EncodeHandler)))
 
 	mux.HandleFunc("/decrypt", handlers.DecodeHandler)

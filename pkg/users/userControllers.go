@@ -3,8 +3,8 @@ package users
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
+	"time"
 
 	"github.com/ShebinSp/Dencryptor/pkg/auth"
 	"github.com/ShebinSp/Dencryptor/pkg/config"
@@ -68,7 +68,7 @@ func SignUp(w http.ResponseWriter, r *http.Request) {
 	if res.Error != nil {
 		resp := map[string]string{
 			"status": "false",
-			"error":  "An error occured",
+			"error":  fmt.Sprintf("User with email '%s' already exists", user.Email),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -83,7 +83,7 @@ func SignUp(w http.ResponseWriter, r *http.Request) {
 
 	ok := fmt.Sprintf("user '%s' registered, Please verify your email", user.FirstName)
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(ok)
 }
 
@@ -198,8 +198,6 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	log.Println("Decoded user data:", userinfo.Email)
-	log.Println("user otp in login: ", otp)
 
 	// Retrieve OTP from the database
 	res := db.Table("otps").Where("email = ?", userinfo.Email).Select("otp").Scan(&otp)
@@ -334,4 +332,29 @@ func GetUserFiles(w http.ResponseWriter, r *http.Request) {
 		"imageList": imglst,
 	})
 
+}
+
+func Logout(w http.ResponseWriter, r *http.Request) {
+	// Set Samesite and other cookie options
+	cookie := &http.Cookie{
+		Name:     "Authorization",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0), // Set to the past to force removal,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	// Set the cookie in the response header
+	http.SetCookie(w, cookie)
+
+	// Return a success message in JSON format
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	// json.NewEncoder(w).Encode(map[string]string{
+	// 	"message": "You are successfully logged in",
+	// })
+	json.NewEncoder(w).Encode("You are successfully logged out")
 }

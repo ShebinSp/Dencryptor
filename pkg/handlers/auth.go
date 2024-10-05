@@ -21,46 +21,39 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		// Extract the Authorization cookie
 		cookie, err := r.Cookie("Authorization")
 		if err != nil {
-			http.Error(w, "No access token provide, please login", http.StatusUnauthorized)
+			log.Println("No access token provided")
+			http.Error(w, "Unauthorized entry, please login", http.StatusUnauthorized)
 			return
 		}
-		log.Println("got cookie")
 
 		tokenString := cookie.Value
 		if tokenString == "" {
-			http.Error(w, "No access token provide, please login", http.StatusUnauthorized)
+			log.Println("Empty token string")
+			http.Error(w, "Unauthorized entry, please login", http.StatusUnauthorized)
 			return
 		}
-		log.Println("tokenSTRING ok")
 
 		// Verify the token
 		uid, err := auth.VerifyToken(tokenString)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("token verification failed: %s", err.Error()), http.StatusUnauthorized)
+			log.Println("Token verification failed:", err)
+			http.Error(w, fmt.Sprintf("Token verification failed: %s", err.Error()), http.StatusUnauthorized)
 			return
 		}
-		log.Println("VerifyToken OK")
 
 		// Store the user ID in the request context
 		ctx := context.WithValue(r.Context(), models.UserIDKey, uid)
 
-		// call the next handler with the new context
+		// Call the next handler with the new context
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
+
 // Function to get userid from the coockie
-func HGetUserId(r *http.Request) (uint, bool) {
+func GetUserId(r *http.Request) (uint, bool) {
 	id, ok := r.Context().Value(models.UserIDKey).(uint)
 	fmt.Println("OK: ", ok)
-	// cookie, err := r.Cookie("Authorization")
-	// if err != nil {
-	// 	return 0, false
-	// }
-	// id := cookie.Value
-	// uid, err := Convert(id)
-	// if err != nil {
-	// 	fmt.Println("err : ", err)
-	// }
+
 	return id, ok
 }

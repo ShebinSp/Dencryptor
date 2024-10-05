@@ -23,8 +23,8 @@ func GenerateJWT(id uint) (string, error) {
 		UserIDKey: id,                                    // Set the user ID here
 		Exp:       time.Now().Add(24 * time.Hour).Unix(), // Set expiration time
 	}
-	log.Printf("User ID: %v ", claims.UserIDKey)
-	log.Printf("Generate Exp: %v ---- Type: %T", claims.Exp, claims.Exp)
+	// log.Printf("User ID: %v ", claims.UserIDKey)
+	// log.Printf("Generate Exp: %v ---- Type: %T", claims.Exp, claims.Exp)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	tokenString, err := token.SignedString(jwtKey)

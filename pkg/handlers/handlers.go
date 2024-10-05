@@ -41,6 +41,15 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+
+func LogoutHandler(w http.ResponseWriter, r *http.Request){
+	switch r.Method {
+	case "GET":
+		users.Logout(w,r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
 // func EncodeHandler(w http.ResponseWriter, r *http.Request) {
 // 	switch r.Method {	
 // 	case "POST":
