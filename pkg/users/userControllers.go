@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/ShebinSp/Dencryptor/pkg/auth"
@@ -30,6 +31,9 @@ func connectToDb() error {
 
 func SignUp(w http.ResponseWriter, r *http.Request) {
 	var user models.User
+	var wg sync.WaitGroup
+	var errCh = make(chan error, 3)
+	defer close(errCh)
 
 	if !dbConnected {
 		err := connectToDb()
@@ -51,36 +55,63 @@ func SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = user.HashPassword(user.Password); err != nil {
-		http.Error(w, "Please check the password requirements", http.StatusBadRequest)
-		return
-	}
-
-	res := db.Table("users").Where("email = ?", user.Email)
-	if res.RowsAffected != 0 {
-		errMsg := fmt.Sprintf("%s Please login with email %s", "User email already exist\n", user.Email)
-
+	// Check if email already exists
+	var existingUser models.User
+	if err := db.Table("users").Where("email = ?", user.Email).First(&existingUser).Error; err == nil {
+		errMsg := fmt.Sprintf("%s Please login with email %s", "User email already exists\n", user.Email)
 		http.Error(w, errMsg, http.StatusBadRequest)
 		return
 	}
 
-	res = db.Create(&user)
-	if res.Error != nil {
-		resp := map[string]string{
-			"status": "false",
-			"error":  fmt.Sprintf("User with email '%s' already exists", user.Email),
+	// Hash password concurrently
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err = user.HashPassword(user.Password); err != nil {
+			errCh <- fmt.Errorf("password hashing failed: %v", err)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(resp)
-		return
+	}()
+
+	// Insert user into DB concurrently
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if res := db.Create(&user); res.Error != nil {
+			errCh <- res.Error
+		}
+	}()
+
+	// Send OTP concurrently
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := SendOTP(user.Email, r); err != nil {
+			http.Error(w, "Email Verification failed", http.StatusBadRequest)
+			return
+		}
+	}()
+
+	// Wait all goroutines to finish
+	wg.Wait()
+
+	// Check for errors
+	select {
+	case crtErr := <- errCh:
+		if crtErr != nil {
+			resp := map[string]string{
+				"status": "false",
+				"error": crtErr.Error(),
+			}
+			w.Header().Set("Content-Type", "applicatioin/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+	default:
+		// No error
 	}
 
-	if err := SendOTP(user.Email, r); err != nil {
-		http.Error(w, "Email Verification failed", http.StatusBadRequest)
-		return
-	}
-
+	// Success response
 	ok := fmt.Sprintf("user '%s' registered, Please verify your email", user.FirstName)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
@@ -93,6 +124,7 @@ func SendOTP(email string, r *http.Request) error {
 	otp := auth.GenerateOTP()
 	user.Email = email
 	user.Otp = otp
+	fmt.Println("OTP: ", otp)
 
 	res := db.Table("otps").Where("email = ?", email)
 	if res.RowsAffected == 0 {

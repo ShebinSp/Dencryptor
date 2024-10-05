@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"fmt"
-	"html/template"
 	"net/http"
 
 	"github.com/ShebinSp/Dencryptor/pkg/services"
@@ -18,7 +16,7 @@ import (
 
 func SignUpHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	
+
 	case "POST":
 		users.SignUp(w, r)
 	default:
