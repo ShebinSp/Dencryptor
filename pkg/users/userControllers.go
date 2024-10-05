@@ -385,8 +385,5 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	// Return a success message in JSON format
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	// json.NewEncoder(w).Encode(map[string]string{
-	// 	"message": "You are successfully logged in",
-	// })
 	json.NewEncoder(w).Encode("You are successfully logged out")
 }
