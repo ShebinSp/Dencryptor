@@ -9,8 +9,6 @@ import (
 func RegisterRoutes() http.Handler {
 	mux := http.NewServeMux()
 
-	//	mux.HandleFunc("/", home)
-
 	mux.HandleFunc("/user/signup", handlers.SignUpHandler)
 
 	mux.HandleFunc("/user/verify/email", handlers.VerificationHandler)

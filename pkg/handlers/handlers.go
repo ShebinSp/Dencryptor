@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"fmt"
+	"html/template"
 	"net/http"
 
 	"github.com/ShebinSp/Dencryptor/pkg/services"
@@ -14,10 +16,11 @@ import (
 // 	return nil
 // }
 
-func SignUpHandler(w http.ResponseWriter, r *http.Request){
+func SignUpHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
+	
 	case "POST":
-		users.SignUp(w,r)
+		users.SignUp(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -26,14 +29,14 @@ func SignUpHandler(w http.ResponseWriter, r *http.Request){
 func VerificationHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
-		users.VerifyEmail(w,r)
+		users.VerifyEmail(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {	
+	switch r.Method {
 	case "POST":
 		users.Login(w, r)
 	default:
@@ -41,17 +44,17 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
-func LogoutHandler(w http.ResponseWriter, r *http.Request){
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		users.Logout(w,r)
+		users.Logout(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
+
 // func EncodeHandler(w http.ResponseWriter, r *http.Request) {
-// 	switch r.Method {	
+// 	switch r.Method {
 // 	case "POST":
 // 		services.EncodeImage(w, r)
 // 	default:
@@ -60,7 +63,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request){
 // }
 
 func EncodeHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {	
+	switch r.Method {
 	case "POST":
 		services.EncodeImage(w, r)
 	default:
@@ -94,4 +97,3 @@ func GetUserFilesHandler(w http.ResponseWriter, r *http.Request) {
 // 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 // 	}
 // }
-
